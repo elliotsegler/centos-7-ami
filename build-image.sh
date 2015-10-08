@@ -26,9 +26,9 @@ make_sysconfig_network_script  $location/mnt/etc/sysconfig/network-scripts/ifcfg
 # sshd for AWS
 make_sshd_config $location/mnt/etc/ssh/sshd_config
 
-make_grub_conf $location/mnt/boot/grub "(hd0)" hvc0 $uuid
+make_grub_conf $location "(hd0)" hvc0 $uuid
 
-unmount_image
+unmount_image $location/mnt
 
 bundle_image $location/out/$name $name $location/out ""
 upload_bundle $location/out/${name}.manifest.xml $s3_location

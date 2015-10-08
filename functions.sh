@@ -199,8 +199,8 @@ function make_grub_conf_label {
   local root=$2
   local console=$3
   local uuid=$4
-  local kernelver=$(rpm -qa | grep '^kernel-3'  | sed -e 's/kernel-//' | head -n 1)
-  cat > $loc <<EOF
+  local kernelver=$(/usr/sbin/chroot $loc/mnt /bin/rpm -qa | grep '^kernel-3'  | sed -e 's/kernel-//' | head -n 1)
+  cat > $loc/mnt/boot/grub/menu.lst <<EOF
 default=0
 timeout=0
 hiddenmenu
@@ -217,8 +217,8 @@ function make_grub_conf {
   local root=$2
   local console=$3
   local uuid=$4
-  local kernelver=$(rpm -qa | grep '^kernel-3'  | sed -e 's/kernel-//' | head -n 1)
-  cat > $loc <<EOF
+  local kernelver=$(/usr/sbin/chroot $loc/mnt /bin/rpm -qa | grep '^kernel-3'  | sed -e 's/kernel-//' | head -n 1)
+  cat > $loc/mnt/boot/grub/menu.lst <<EOF
 default=0
 timeout=0
 hiddenmenu
@@ -277,11 +277,11 @@ function prepare_chroot {
   local mount_point=$1
   mkdir -p $mount_point/{dev,etc,proc,sys}
   mkdir -p $mount_point/var/{cache,log,lock,lib/rpm}
-  /sbin/MAKEDEV -d $mount_point/dev -x console
-  /sbin/MAKEDEV -d $mount_point/dev -x null
-  /sbin/MAKEDEV -d $mount_point/dev -x zero
-  /sbin/MAKEDEV -d $mount_point/dev -x tty
-  /sbin/MAKEDEV -d $mount_point/dev -x urandom
+  mknod $mount_point/dev/console c 5 0
+  mknod $mount_point/dev/null c 1 3
+  mknod $mount_point/dev/zero c 1 5
+  mknod $mount_point/dev/tty c 5 0
+  mknod $mount_point/dev/urandom c 1 9
   ln -s null $mount_point/dev/X0R
   mount -o bind /dev $mount_point/dev
   mount -o bind /dev/pts $mount_point/dev/pts
@@ -310,24 +310,24 @@ function install_packages_in_chroot {
   cat > $image_root/yum-xen.conf <<EOF
 [base]
 name=CentOS-7 - Base
-mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=os
-#baseurl=http://mirror.centos.org/centos/7/os/x86_64/
+#mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=os
+baseurl=http://mirror.centos.org/centos/7/os/x86_64/
 gpgcheck=1
 gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7
 
 #released updates
 [updates]
 name=CentOS-7 - Updates
-mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=updates
-#baseurl=http://mirror.centos.org/centos/7/updates/x86_64/
+#mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=updates
+baseurl=http://mirror.centos.org/centos/7/updates/x86_64/
 gpgcheck=1
 gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7
 
 #additional packages that may be useful
 [extras]
 name=CentOS-7 - Extras
-mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=extras
-#baseurl=http://mirror.centos.org/centos/7/extras/x86_64/
+#mirrorlist=http://mirrorlist.centos.org/?release=7&arch=x86_64&repo=extras
+baseurl=http://mirror.centos.org/centos/7/extras/x86_64/
 gpgcheck=1
 gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7
 
@@ -351,8 +351,8 @@ gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7
 
 [epel]
 name=Extra Packages for Enterprise Linux 7 - \$basearch
-#baseurl=http://download.fedoraproject.org/pub/epel/7/\$basearch
-mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-7&arch=\$basearch
+baseurl=http://download.fedoraproject.org/pub/epel/7/\$basearch
+#mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-7&arch=\$basearch
 failovermethod=priority
 enabled=1
 gpgcheck=0
@@ -378,18 +378,19 @@ gpgcheck=1
 EOF
 
 rpm -qa > $image_root/rpms.txt
-yum -c $image_root/yum-xen.conf --installroot=$chroot install `cat $image_root/rpms.txt`
+perl -pe 's/\-\d+.*//g' $image_root/rpms.txt > $image_root/rpms.nover.txt
+yum -c $image_root/yum-xen.conf --installroot=$chroot install -y `cat $image_root/rpms.nover.txt`
 # install necessary packages
-yum -c $image_root/yum-xen.conf --installroot=$chroot -y install dhclient grub e2fsprogs selinux-policy selinux-policy-targeted chrony cloud-utils-growpart cloud-init
+yum -c $image_root/yum-xen.conf --installroot=$chroot -y install dhclient grub e2fsprogs selinux-policy selinux-policy-targeted chrony cloud-utils-growpart cloud-init acpid openssh-server
 
-/usr/sbin/chroot $mount_point /bin/systemctl enable acpid
-/usr/sbin/chroot $mount_point /bin/systemctl enable sshd
-/usr/sbin/chroot $mount_point /bin/systemctl enable chronyd
-/usr/sbin/chroot $mount_point /bin/systemctl enable cloud-init
-/usr/sbin/chroot $mount_point /bin/systemctl enable cloud-init-local
-/usr/sbin/chroot $mount_point /bin/systemctl enable cloud-config
-/usr/sbin/chroot $mount_point /bin/systemctl enable cloud-final
-/usr/sbin/chroot $mount_point /bin/systemctl enable sshd
+/usr/sbin/chroot $chroot /bin/systemctl enable acpid
+/usr/sbin/chroot $chroot /bin/systemctl enable sshd
+/usr/sbin/chroot $chroot /bin/systemctl enable chronyd
+/usr/sbin/chroot $chroot /bin/systemctl enable cloud-init
+/usr/sbin/chroot $chroot /bin/systemctl enable cloud-init-local
+/usr/sbin/chroot $chroot /bin/systemctl enable cloud-config
+/usr/sbin/chroot $chroot /bin/systemctl enable cloud-final
+/usr/sbin/chroot $chroot /bin/systemctl enable sshd
 }
 
 function mount_partitioned_image {
@@ -507,7 +508,7 @@ function register_image {
   shift
   if [ $ami_type == "paravirtual" ]
   then
-    aws ec2 register-image --image-location $s3_location/$name.manifest.xml --name $name --region $region --architecture x86_64 --kernel $aki --virtualization-type pv $*
+    aws ec2 register-image --image-location $s3_location/$name.manifest.xml --name $name --region $region --architecture x86_64 --kernel $aki --virtualization-type paravirtual $*
   else
     echo aws ec2 register-image --image-location $s3_location/$name.manifest.xml --name $name --region $region --architecture x86_64 --virtualization-type hvm $*
     aws ec2 register-image --image-location $s3_location/$name.manifest.xml --name $name --region $region --architecture x86_64 --virtualization-type hvm $*
