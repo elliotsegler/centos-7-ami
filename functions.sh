@@ -20,11 +20,11 @@ function install_tooling {
   fi
 
   # MAKEDEV package from centos 6, no longer available in 7. TODO: make it work with mknod
-  if [ ! -f MAKEDEV-3.24-6.el6.x86_64.rpm ];
-  then 
-    wget http://mirror.centos.org/centos/6/os/x86_64/Packages/MAKEDEV-3.24-6.el6.x86_64.rpm
-    rpm -ivh MAKEDEV-3.24-6.el6.x86_64.rpm
-  fi
+  #if [ ! -f MAKEDEV-3.24-6.el6.x86_64.rpm ];
+  #then 
+  #  wget http://mirror.centos.org/centos/6/os/x86_64/Packages/MAKEDEV-3.24-6.el6.x86_64.rpm
+  #  rpm -ivh MAKEDEV-3.24-6.el6.x86_64.rpm
+  #fi
 
   # awscli
   if [ ! -f get-pip.py ];
@@ -35,68 +35,68 @@ function install_tooling {
   fi
 
   # Java for amazon ec2-ami-tools, ec2-api-tools
-  if [ ! -f jdk-7u67-linux-x64.rpm ];
+  if [ ! -f jdk-8u60-linux-x64.rpm ];
   then
-    wget --no-cookies --no-check-certificate --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" "http://download.oracle.com/otn-pub/java/jdk/7u67-b01/jdk-7u67-linux-x64.rpm"
-    rpm -ivh jdk-7u67-linux-x64.rpm
+    curl -v -j -k -L -H "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/8u60-b27/jdk-8u60-linux-x64.rpm > jdk-8u60-linux-x64.rpm
+    rpm -ivh jdk-8u60-linux-x64.rpm
   fi
 
   # Grub Legacy for PV-grub compatibility
-  if [ ! -f grub-0.97-83.el6.x86 ];
+  if [ ! -f grub-0.97-94.el6.x86 ];
   then
-    wget http://mirror.centos.org/centos/6/os/x86_64/Packages/grub-0.97-83.el6.x86_64.rpm
+    curl -O http://mirror.centos.org/centos/6/os/x86_64/Packages/grub-0.97-94.el6.x86_64.rpm
     mkdir -p grub
     rm -rf grub/*
-    pushd grub && rpm2cpio ../grub-0.97-83.el6.x86_64.rpm | cpio -idmv && popd
+    pushd grub && rpm2cpio ../grub-0.97-94.el6.x86_64.rpm | cpio -idmv && popd
     cp -a grub/sbin/* /sbin/
     cp -a grub/usr/* /usr/
   fi
 
-  cat > image.rb.patch <<EOF
---- /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb.backup	2014-09-02 06:39:55.701064999 +0000
-+++ /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb	2014-09-02 06:41:34.536401184 +0000
-@@ -382,7 +382,7 @@
-           info = fsinfo( root )
-           label= info[:label]
-           uuid = info[:uuid]
--          type = info[:type] || 'ext3'
-+          type = info[:type] || 'xfs'
-           execute('modprobe loop') unless File.blockdev?('/dev/loop0')
- 
-           target = nil
-@@ -648,7 +648,7 @@
-           raise FatalError.new("image already mounted") if mounted?(IMG_MNT)
-           dirs = ['mnt', 'proc', 'sys', 'dev']
-           if self.is_disk_image?
--            execute( 'mount -t %s %s %s' % [@fstype, @target, IMG_MNT] )
-+            execute( 'mount -t %s -o nouuid %s %s' % [@fstype, @target, IMG_MNT] )
-             dirs.each{|dir| FileUtils.mkdir_p( '%s/%s' % [IMG_MNT, dir])}
-             make_special_devices
-             execute( 'mount -o bind /proc %s/proc' % IMG_MNT )
-@@ -741,8 +741,12 @@
-             fstab_content = make_fstab
-             File.open( fstab, 'w' ) { |f| f.write( fstab_content ) }
-             puts "/etc/fstab:"
--            fstab_content.each do |s|
--              puts "\t #{s}"
-+            if fstab_content.kind_of?(Array)
-+              fstab_content.each do |s|
-+                puts "\t #{s}"
-+              end
-+            else
-+              puts "\t #{fstab_content}"
-             end
-           end
-         end
-EOF
-
-  patch -p0 /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb < image.rb.patch
-
+#  cat > image.rb.patch <<EOF
+#--- /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb.backup	2014-09-02 06:39:55.701064999 +0000
+#+++ /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb	2014-09-02 06:41:34.536401184 +0000
+#@@ -382,7 +382,7 @@
+#           info = fsinfo( root )
+#           label= info[:label]
+#           uuid = info[:uuid]
+#-          type = info[:type] || 'ext3'
+#+          type = info[:type] || 'xfs'
+#           execute('modprobe loop') unless File.blockdev?('/dev/loop0')
+# 
+#           target = nil
+#@@ -648,7 +648,7 @@
+#           raise FatalError.new("image already mounted") if mounted?(IMG_MNT)
+#           dirs = ['mnt', 'proc', 'sys', 'dev']
+#           if self.is_disk_image?
+#-            execute( 'mount -t %s %s %s' % [@fstype, @target, IMG_MNT] )
+#+            execute( 'mount -t %s -o nouuid %s %s' % [@fstype, @target, IMG_MNT] )
+#             dirs.each{|dir| FileUtils.mkdir_p( '%s/%s' % [IMG_MNT, dir])}
+#             make_special_devices
+#             execute( 'mount -o bind /proc %s/proc' % IMG_MNT )
+#@@ -741,8 +741,12 @@
+#             fstab_content = make_fstab
+#             File.open( fstab, 'w' ) { |f| f.write( fstab_content ) }
+#             puts "/etc/fstab:"
+#-            fstab_content.each do |s|
+#-              puts "\t #{s}"
+#+            if fstab_content.kind_of?(Array)
+#+              fstab_content.each do |s|
+#+                puts "\t #{s}"
+#+              end
+#+            else
+#+              puts "\t #{fstab_content}"
+#             end
+#           end
+#         end
+#EOF
+#
+#  patch -p0 /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb < image.rb.patch
+#
 mkdir -p $HOME/.aws
 cat > $HOME/.aws/config <<EOF
 [default]
 output = json
-region = eu-west-1
+region = us-east-1
 aws_access_key_id = $access_key
 aws_secret_access_key = $secret_key
 EOF
