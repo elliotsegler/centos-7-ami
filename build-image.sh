@@ -28,8 +28,10 @@ make_sshd_config $location/mnt/etc/ssh/sshd_config
 
 make_grub_conf $location "(hd0)" hvc0 $uuid
 
+fix_restorecon $location/mnt
+
 unmount_image $location/mnt
 
 bundle_image $location/out/$name $name $location/out ""
 upload_bundle $location/out/${name}.manifest.xml $s3_location
-register_image paravirtual $s3_location/$name.manifest.xml $name 
+register_image paravirtual $s3_location/$name.manifest.xml $name
