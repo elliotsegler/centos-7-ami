@@ -53,8 +53,8 @@ function install_tooling {
   fi
 
 #  cat > image.rb.patch <<EOF
-#--- /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb.backup	2014-09-02 06:39:55.701064999 +0000
-#+++ /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb	2014-09-02 06:41:34.536401184 +0000
+#--- /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb.backup 2014-09-02 06:39:55.701064999 +0000
+#+++ /usr/lib/ruby/site_ruby/ec2/platform/linux/image.rb        2014-09-02 06:41:34.536401184 +0000
 #@@ -382,7 +382,7 @@
 #           info = fsinfo( root )
 #           label= info[:label]
@@ -206,9 +206,9 @@ timeout=0
 hiddenmenu
 
 title CentOS Linux ($kernelver) 7 (Core)
-	root $root
-	kernel /boot/vmlinuz-$kernelver ro root=LABEL=/ console=$console LANG=en_US.UTF-8 loglvl=all sync_console console_to_ring earlyprintk=xen xen_emul_unplug=unnecessary xen_pv_hvm=enable
-	initrd /boot/initramfs-$kernelver.img
+        root $root
+        kernel /boot/vmlinuz-$kernelver ro root=LABEL=/ console=$console LANG=en_US.UTF-8 loglvl=all sync_console console_to_ring earlyprintk=xen xen_emul_unplug=unnecessary xen_pv_hvm=enable
+        initrd /boot/initramfs-$kernelver.img
 EOF
 }
 
@@ -224,9 +224,9 @@ timeout=0
 hiddenmenu
 
 title CentOS Linux ($kernelver) 7 (Core)
-	root $root
-	kernel /boot/vmlinuz-$kernelver ro root=UUID=$uuid console=$console LANG=en_US.UTF-8 loglvl=all sync_console console_to_ring earlyprintk=xen xen_emul_unplug=unnecessary xen_pv_hvm=enable
-	initrd /boot/initramfs-$kernelver.img
+        root $root
+        kernel /boot/vmlinuz-$kernelver ro root=UUID=$uuid console=$console LANG=en_US.UTF-8 loglvl=all sync_console console_to_ring earlyprintk=xen xen_emul_unplug=unnecessary xen_pv_hvm=enable
+        initrd /boot/initramfs-$kernelver.img
 EOF
 }
 
@@ -416,10 +416,15 @@ EOF
   fi
   chroot $chroot dracut --force --add-drivers "ixgbevf virtio"
   ln -s ./hda1 ${chroot}/dev/mapper/hdap1
-  cp -a /usr/share/grub/x86_64-redhat/stage{1,2} $chroot/boot/grub/
-  cp -a /usr/share/grub/x86_64-redhat/*_stage1_5 $chroot/boot/grub/
+  cp -af /usr/share/grub/x86_64-redhat/stage{1,2} $chroot/boot/grub/
+  cp -af /usr/share/grub/x86_64-redhat/*_stage1_5 $chroot/boot/grub/
   setarch x86_64 chroot $chroot env -i echo -e "device (hd0) /dev/mapper/hda\nroot (hd0,0)\nsetup (hd0)" | grub --device-map=/dev/null --batch
-  ln -s /boot/grub/grub.conf $chroot/boot/grub/menu.lst
+  #ln -s /boot/grub/grub.conf $chroot/boot/grub/menu.lst
+}
+
+function fix_restorecon {
+  local chroot=$1
+  chroot $chroot restorecon -r /
 }
 
 function unmount_image {
