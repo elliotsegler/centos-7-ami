@@ -116,8 +116,9 @@ function prepare_mount_image_partitioned {
 }
 
 function finish_unmount_image_partitioned {
-  kpartx -d /dev/mapper/hda
-  dmsetup remove hda
+  kpartx -d /dev/mapper/loop0p1
+  losetup -D
+  dmsetup remove loop0p1
   losetup -D
 }
 
@@ -130,6 +131,11 @@ function make_fstab {
     local uuid=$(/sbin/blkid -o value -s UUID $current_root)
     cat > $loc <<EOF
 UUID=$uuid /         xfs    defaults,noatime 1 1
+EOF
+  elif [ "${method}" == "label" ];
+  then
+    cat > $loc <<EOF
+LABEL=root /         xfs    defaults,noatime 1 1
 EOF
   elif [ "${method}" == "simple" ];
   then
@@ -243,19 +249,29 @@ function make_mbr_image {
 
   # make an MBR/msdos partition
   parted --script $image -- 'unit s mklabel msdos mkpart primary 63 -1s set 1 boot on print quit'
-  sync; /sbin/udevadm settle
-  sync; /sbin/udevadm settle
 
   # setup loop device
-  prepare_mount_image_partitioned $image $size
-  sync; /sbin/udevadm settle
+  loop=$(losetup -f)
+  losetup $loop $image
+  res=$(kpartx -av $loop)
+  dmdev=$(echo "${res} " | awk '{print $3}')
+  echo "I think the device is mapped to /dev/mapper/$dmdev"
+  sleep 5;
+  if [ ! -b /dev/mapper/$dmdev ]; then
+    echo "Something went horribly wrong setting up the loopback device $loop with $image..."
+    echo "Exiting..."
+    exit 1
+  fi
+
+  # setup loop for partition
+  ploop=$(losetup -f)
+  losetup $ploop /dev/mapper/$dmdev
 
   # create an XFS partition
-  /sbin/mkfs.xfs /dev/mapper/hda1
-  # take the existing root uuid and copy it
-  /usr/sbin/xfs_admin -U $uuid /dev/mapper/hda1
+  /sbin/mkfs.xfs -L root /dev/mapper/$dmdev
 
-  sync
+  # take the existing root uuid and copy it
+  #/usr/sbin/xfs_admin -U $uuid /dev/mapper/hda1
 }
 
 function prepare_dirs {
@@ -406,19 +422,21 @@ function mount_raw_image {
 
 function install_grub {
   local chroot=$1
+  local image=$2
   # Install Grub. This might throw errors, just run it another time
   cat > $chroot/boot/grub/device.map <<EOF
-  (hd0) /dev/mapper/hda
+  (hd0) /dev/loop0
+  (hd0,0) /dev/loop1
 EOF
   if [ ! -f $chroot/etc/mtab ];
   then
     ln -s /proc/mounts $chroot/etc/mtab
   fi
-  chroot $chroot dracut --force --add-drivers "ixgbevf virtio"
-  ln -s ./hda1 ${chroot}/dev/mapper/hdap1
+  local kernelver=$(/usr/sbin/chroot $loc/mnt rpm -qa | grep '^kernel-3'  | sed -e 's/kernel-//' | head -n 1)
+  chroot $chroot dracut /boot/initramfs-$kernelver.img -k /lib/modules/$kernelver --add-drivers "ixgbevf virtio"
   cp -af /usr/share/grub/x86_64-redhat/stage{1,2} $chroot/boot/grub/
   cp -af /usr/share/grub/x86_64-redhat/*_stage1_5 $chroot/boot/grub/
-  setarch x86_64 chroot $chroot env -i echo -e "device (hd0) /dev/mapper/hda\nroot (hd0,0)\nsetup (hd0)" | grub --device-map=/dev/null --batch
+  echo -e "device (hd0) $image\nroot (hd0,0)\nsetup (hd0)" | grub --device-map=/dev/null --batch
   #ln -s /boot/grub/grub.conf $chroot/boot/grub/menu.lst
 }
 
